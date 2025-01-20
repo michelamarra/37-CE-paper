@@ -1,0 +1,80 @@
+//Code for quantifying capsule area per bacterium in ImageJ using length for normalization 
+//Language: ImageJ Macro
+
+close("\\Others");
+run("Set Scale...", "distance=1 known=0.07 pixel=1 unit=um global")
+name = getInfo("image.filename")
+
+
+setTool("rectangle");
+waitForUser("Draw rectangle over one bacterial chain");
+run("Duplicate...", "title=crop duplicate");
+
+//duplicate selected ROI
+selectWindow("crop");
+Stack.setChannel(1);
+Property.set("CompositeProjection", "null");
+Stack.setDisplayMode("color");
+run("Grays");
+Stack.setChannel(2);
+run("Grays");
+run("Duplicate...", "title=FITC duplicate channels=1");
+selectWindow("crop");
+run("Duplicate...", "title=TRITC duplicate channels=2");
+selectWindow("crop");
+run("Duplicate...", "title=phase duplicate channels=3");
+
+//User thresholds FITC exclusion zone and area sent to results
+selectWindow("FITC");
+run("Median...", "radius=2");
+		setAutoThreshold("Minimum");
+		run("Threshold...");
+		waitForUser("Please adjust threshold of FITC excluded area");
+run("Convert to Mask");
+imageCalculator("Divide create 32-bit", "FITC","FITC");
+selectWindow("Result of FITC");
+getStatistics(area1, mean, min, max, std, histogram);
+//setResult("Capsule Area", nResults, area1);
+
+//use fitc mask to calculate length of bacterium
+selectWindow("FITC");
+	setTool("polyline");
+	waitForUser("use polyline to measure length of bacterium, then press ok");
+run("Measure")
+
+
+//User thresholds bacterial bodies in phase
+selectWindow("phase");
+run("Mean...", "radius=.5");
+		setAutoThreshold("Default");
+		run("Threshold...");
+		waitForUser("Please adjust threshold for bacteria. It's okay if they are hollow, but must be complete circles.");
+run("Convert to Mask");
+run("Fill Holes"); /// use a FITC mask here to exclude phase debris outside FITC exclusion zone
+run("8-bit");
+imageCalculator("Multiply create 32-bit", "Result of FITC","phase");
+selectWindow("Result of Result of FITC");
+rename("phase-FITC-masked");
+run("Convert to Mask");
+imageCalculator("Divide create 32-bit", "phase-FITC-masked","phase-FITC-masked");
+selectWindow("Result of phase-FITC-masked");
+getStatistics(area2, mean, min, max, std, histogram);
+
+//populate bacteria area from phase and capsule area from FITC channel
+setResult("Bacteria Area", nResults-1, area2);
+setResult("Total Area", nResults-1, area1);
+setResult("Capsule Area", nResults-1, area1-area2)
+length = getResult("Length", nResults-1)
+cArea = getResult("Capsule Area", nResults-1)
+setResult("Capsule per Bacteria", nResults-1, cArea/length);
+setResult("Source", nResults-1, name);
+
+//make an output image
+selectWindow("FITC");
+run("Invert");
+selectWindow("phase-FITC-masked");
+run("8-bit");
+
+run("Merge Channels...", "c2=FITC c3=phase-FITC-masked create keep");
+
+setTool("rectangle");
